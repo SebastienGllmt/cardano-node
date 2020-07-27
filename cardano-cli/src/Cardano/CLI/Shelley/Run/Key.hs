@@ -8,6 +8,10 @@ module Cardano.CLI.Shelley.Run.Key
 
     -- * Exports for testing
   , decodeBech32Key
+  , convertITNVerificationKey
+  , convertITNExtendedSigningKey
+  , convertITNBIP32SigningKey
+  , convertITNExtendedPublicKey
   ) where
 
 import           Cardano.Prelude
@@ -22,6 +26,7 @@ import qualified Control.Exception as Exception
 
 import qualified Codec.Binary.Bech32 as Bech32
 
+import           Cardano.Address.Derivation (toXPub, xprvFromBytes)
 import qualified Cardano.Crypto.DSIGN as DSIGN
 import qualified Cardano.Crypto.Signing as Byron.Crypto
 
@@ -117,7 +122,7 @@ withSomeSigningKey ssk f =
       AGenesisSigningKey         sk -> f sk
       AGenesisExtendedSigningKey sk -> f sk
       AGenesisDelegateSigningKey sk -> f sk
-      AGenesisDelegateExtendedSigningKey 
+      AGenesisDelegateExtendedSigningKey
                                  sk -> f sk
       AGenesisUTxOSigningKey     sk -> f sk
       AVrfSigningKey             sk -> f sk
@@ -425,6 +430,34 @@ convertITNSigningKey privKey = do
     Just signKey -> Right $ StakeSigningKey signKey
     Nothing -> Left $ SigningKeyDeserializationError keyBS
 
+convertITNExtendedPublicKey :: Text -> Either ConversionError (VerificationKey StakeExtendedKey)
+convertITNExtendedPublicKey pubKey = do
+  (_, _, pubkeyBS) <- decodeBech32Key pubKey
+  let dummyChainCode = "00000000000000000000000000000000"
+  case xprvFromBytes (BS.concat [pubkeyBS,dummyChainCode]) of
+    Just xprv -> Right . StakeExtendedVerificationKey $ toXPub xprv
+    Nothing -> Left $ SigningKeyDeserializationError pubkeyBS
+
+-- | Convert extended private ed22519 key to a Shelley signing key
+-- Extended private key = 64 bytes,
+-- Public key = 32 bytes.
+convertITNExtendedSigningKey :: Text -> Either ConversionError (SigningKey StakeExtendedKey)
+convertITNExtendedSigningKey privKey = do
+  (_, _, privkeyBS) <- decodeBech32Key privKey
+  let dummyChainCode = "00000000000000000000000000000000"
+  case xprvFromBytes (BS.concat [privkeyBS,dummyChainCode]) of
+    Just xprv -> Right $ StakeExtendedSigningKey xprv
+    Nothing -> Left $ SigningKeyDeserializationError privkeyBS
+
+-- BIP32 Private key = 96 bytes (64 bytes extended private key + 32 bytes chaincode)
+-- BIP32 Public Key = 64 Bytes
+convertITNBIP32SigningKey :: Text -> Either ConversionError (SigningKey StakeExtendedKey)
+convertITNBIP32SigningKey privKey = do
+  (_, _, privkeyBS) <- decodeBech32Key privKey
+  case xprvFromBytes privkeyBS of
+    Just xprv -> Right $ StakeExtendedSigningKey xprv
+    Nothing -> Left $ SigningKeyDeserializationError privkeyBS
+
 -- | Convert ITN Bech32 public or private keys to 'ByteString's
 decodeBech32Key :: Text
                 -> Either ConversionError
@@ -442,4 +475,3 @@ readFileITNKey fp = do
   case eStr of
     Left e -> return . Left $ Bech32ReadError fp e
     Right str -> return . Right . Text.concat $ Text.words str
-

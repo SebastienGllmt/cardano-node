@@ -3269,6 +3269,7 @@ instance SerialiseAsRawBytes (SigningKey PaymentExtendedKey) where
       either (const Nothing) (Just . PaymentExtendedSigningKey)
              (Crypto.HD.xprv bs)
 
+
 instance SerialiseAsBech32 (VerificationKey PaymentExtendedKey) where
     bech32PrefixFor         _ =  "addr_xvk"
     bech32PrefixesPermitted _ = ["addr_xvk"]
@@ -3504,8 +3505,11 @@ instance SerialiseAsRawBytes (SigningKey StakeExtendedKey) where
       Crypto.HD.unXPrv xprv
 
     deserialiseFromRawBytes (AsSigningKey AsStakeExtendedKey) bs =
-      either (const Nothing) (Just . StakeExtendedSigningKey)
-             (Crypto.HD.xprv bs)
+      --either (const Nothing) (Just . StakeExtendedSigningKey)
+      --       (Crypto.HD.xprv bs)
+      case Crypto.HD.xprv bs of
+        Left err -> error $ show err
+        Right v -> Just $ StakeExtendedSigningKey v
 
 instance SerialiseAsBech32 (VerificationKey StakeExtendedKey) where
     bech32PrefixFor         _ =  "stake_xvk"
